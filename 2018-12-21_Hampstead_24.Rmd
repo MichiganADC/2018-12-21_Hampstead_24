@@ -1,0 +1,340 @@
+---
+title: "2018-12-21_Hampstead_24"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    theme: cerulean
+    highlight: pygments
+---
+
+
+# Load Requirements
+
+## Load Useful Libraries 
+
+```{r}
+library(dplyr)
+library(stringr)
+```
+
+## Load Useful Variables
+
+```{r}
+source("~/Desktop/config.R")
+source("~/Desktop/helpers.R")
+
+# switch to access API (TRUE) or not (FALSE)
+get_api_data <- TRUE
+```
+
+
+# Get Data
+
+## Get MRI Scan Data from UM Box
+
+### Download spreadsheet as df
+```{r}
+file_id <- 320718450581
+
+boxr::box_auth(client_id = BOX_CLIENT_ID, client_secret = BOX_CLIENT_SECRET)
+# boxr::box_dl(file_id = 320718450581, overwrite = TRUE)
+df_mri <- boxr::box_read_excel(file_id = file_id)
+names(df_mri)
+df_mri <- df_mri %>% 
+  dplyr::filter(!is.na(UDS_ID)) %>% 
+  dplyr::mutate(UDS_ID = as.integer(UDS_ID)) %>% 
+  dplyr::mutate(Scan_Date = as.Date(Scan_Date))
+
+df_mri <- df_mri %>% 
+  dplyr::mutate(ptid = dplyr::case_when(
+    nchar(UDS_ID) == 3 ~ paste0('UM00000', UDS_ID),
+    nchar(UDS_ID) == 4 ~ paste0('UM0000', UDS_ID),
+    TRUE ~ NA_character_
+  )) %>% 
+  dplyr::select(ptid, dplyr::everything()) %>% 
+  dplyr::arrange(ptid, dplyr::desc(Scan_Date))
+```
+
+### Get UMMAP IDs of MRI scans
+
+```{r}
+mri_ids <- df_mri %>% distinct(ptid) %>% pull()
+
+umid_records <- mri_ids %>% paste(collapse = ",")
+```
+
+
+## Define UDS/MiNDSet Data Fields/Forms
+
+### UDS 2
+```{r}
+fields_u2_raw <- c("subject_id"
+                   , "a1form_date"
+                   , "dob"
+                   , "race"
+                   , "sex"
+                   , "handed"
+                   , "educ"
+                   , "maristat")
+
+forms_u2_raw <- c("form_b5_behavioral_assessment_npi_q"
+                  , "form_c1_mmse_and_npsych")
+
+fields_u2 <- fields_u2_raw %>% paste(collapse = ",")
+forms_u2 <- forms_u2_raw %>% paste(collapse = ",")
+```
+
+### UDS 3
+```{r}
+fields_u3_raw <- c("ptid"
+                   , "form_date"
+                   , "dob"
+                   , "race"
+                   , "sex"
+                   , "handed"
+                   , "educ"
+                   , "maristat"
+                   , "fu_sex"
+                   , "fu_maristat")
+
+forms_u3_raw <- c("ivp_b5"
+                  , "ivp_c2"
+                  , "fvp_b5"
+                  , "fvp_c2"
+                  , "oltt"
+                  , "hol_questionnaire"
+                  , "ipad_tool_box")
+
+fields_u3 <- fields_u3_raw %>% paste(collapse = ",")
+forms_u3 <- forms_u3_raw %>% paste(collapse = ",")
+```
+
+### MiNDSet Registry
+```{r}
+fields_ms_raw <- c("subject_id"
+                   , "exam_date"
+                   , "uds_dx")
+
+fields_ms <- fields_ms_raw %>% paste(collapse = ",")
+```
+
+
+## Retrieve Data via REDCap API
+
+### UDS 2
+```{r}
+if (get_api_data) {
+  json_u2 <- rc_api_get(token   = REDCAP_API_TOKEN_UDS2,
+                        fields  = fields_u2,
+                        forms   = forms_u2,
+                        records = umid_records)
+}
+
+df_u2 <- jsonlite::fromJSON(json_u2) %>% na_if("")
+```
+
+### UDS 3
+```{r}
+if (get_api_data) {
+  json_u3 <- rc_api_get(token   = REDCAP_API_TOKEN_UDS3n,
+                        fields  = fields_u3,
+                        forms   = forms_u3,
+                        records = umid_records)
+}
+
+df_u3 <- jsonlite::fromJSON(json_u3) %>% na_if("")
+```
+
+### MiNDSet Registry
+```{r}
+if (get_api_data) {
+  json_ms <- rc_api_get(token   = REDCAP_API_TOKEN_MINDSET,
+                        fields  = fields_ms,
+                        records = umid_records,
+                        raw     = FALSE)
+}
+
+df_ms <- jsonlite::fromJSON(json_ms) %>% na_if("")
+```
+
+
+## Write Raw Data to CSV
+
+### UDS 2
+```{r}
+readr::write_csv(df_u2, "df_u2.csv", na = "")
+```
+
+### UDS 3
+```{r}
+readr::write_csv(df_u3, "df_u3.csv", na = "")
+```
+
+### MiNDSet Registry
+```{r}
+readr::write_csv(df_ms, "df_ms.csv", na = "")
+```
+
+
+# Process Data
+
+## Clean Data
+
+### UDS 2
+```{r}
+# Clean out records with missing dates or "x.5" visits,
+#   and deselect some redundant fields
+df_u2_cln <- df_u2 %>% 
+  mutate(dob = lubridate::mdy(dob),
+         a1form_date = lubridate::ymd(a1form_date)) %>% 
+  filter(!is.na(a1form_date)) %>% 
+  filter(str_detect(redcap_event_name, "^visit_\\d{1,2}")) %>% 
+  select(-b5ptid, -b5_formdate, -b5_visit_month, -b5_visit_day, -b5_visit_yr,
+         -c1ptid, -c1form_date, -c1_visit_month, -c1_visit_day, -c1_visit_yr)
+
+# rename key fields
+df_u2_cln_rn <- df_u2_cln %>% 
+  rename(ptid = subject_id,
+         form_date = a1form_date)
+```
+
+### UDS 3
+```{r}
+# Clean out records with missing dates or "x.5" visits
+df_u3_cln <- df_u3 %>% 
+  mutate(dob = lubridate::ymd(dob),
+         form_date = lubridate::ymd(form_date)) %>% 
+  filter(!is.na(form_date)) %>% 
+  filter(str_detect(redcap_event_name, "^visit_[1-9]"))
+
+# Rename some fields
+names(df_u3_cln) <- str_replace_all(string = names(df_u3_cln),
+                                    pattern = "_c2",
+                                    replacement = "")
+
+# Collapse IFT fields
+df_u3_cln_clps <- df_u3_cln
+collapsible_fields_u3 <- get_ift_dups(names(df_u3_cln))
+for (field in collapsible_fields_u3) {
+  df_u3_cln_clps <- collapse_ift_cols(df_u3_cln_clps, !!field) # <= NOTICE !!
+}
+```
+
+### MiNDSet Registry
+```{r}
+# Clean out records with missing dates or "x.5" visits
+df_ms_cln <- df_ms %>% 
+  filter(!is.na(exam_date)) %>% 
+  select(-redcap_event_name) %>% 
+  mutate(exam_date = lubridate::ymd(exam_date))
+```
+
+
+## Join Data
+
+### UDS 2 + UDS 3
+```{r}
+names_u2 <- names(df_u2_cln_rn)
+names_u3 <- names(df_u3_cln_clps)
+length(unique(c(names_u2, names_u3)))
+df_u2_u3 <- bind_rows(df_u2_cln_rn, df_u3_cln_clps)
+ncol(df_u2_u3)
+```
+
+### UDS 2/3 + MiNDSet Registry
+
+```{r}
+df_u2_u3_ms <-
+  FuzzyDateJoin::outer_left(
+    df_u2_u3, df_ms_cln,
+    x_id_col = "ptid", y_id_col = "subject_id",
+    x_date_col = "form_date", y_date_col = "exam_date",
+    x_intvl_less = 120, x_intvl_more = 120,
+    keep_y_id = FALSE
+  )
+```
+
+
+### Fill missing DOB values
+```{r}
+df_u2_u3_ms <- df_u2_u3_ms %>% 
+  arrange(ptid, desc(form_date))
+
+for (i in 2:nrow(df_u2_u3_ms)) {
+  # cat(paste(i, "\n"))
+  
+  prev_id <- df_u2_u3_ms[[i-1, "ptid"]]
+  curr_id <- df_u2_u3_ms[[i, "ptid"]]
+  prev_dob <- df_u2_u3_ms[[i-1, "dob"]]
+  curr_dob <- df_u2_u3_ms[[i, "dob"]]
+  
+  if (prev_id == curr_id && !is.na(prev_dob) && is.na(curr_dob)) {
+    df_u2_u3_ms[[i, "dob"]] <- prev_dob
+  }
+}
+
+df_u2_u3_ms <- df_u2_u3_ms %>% 
+  arrange(ptid, form_date)
+
+for (i in 2:nrow(df_u2_u3_ms)) {
+  # cat(paste(i, "\n"))
+  
+  prev_id <- df_u2_u3_ms[[i-1, "ptid"]]
+  curr_id <- df_u2_u3_ms[[i, "ptid"]]
+  prev_dob <- df_u2_u3_ms[[i-1, "dob"]]
+  curr_dob <- df_u2_u3_ms[[i, "dob"]]
+  
+  if (prev_id == curr_id && !is.na(prev_dob) && is.na(curr_dob)) {
+    df_u2_u3_ms[[i, "dob"]] <- prev_dob
+  }
+}
+```
+
+### Calculate age
+```{r}
+df_u2_u3_ms <- calculate_age(df_u2_u3_ms, dob, form_date)
+```
+
+### Reorder columns
+```{r}
+df_u2_u3_ms <- df_u2_u3_ms %>% 
+  select(-redcap_event_name, -dob) %>% 
+  select(ptid, form_date, uds_dx, age, age_exact, everything())
+```
+
+
+# Write Data
+
+## Write to CSV
+
+```{r}
+readr::write_csv(df_u2_u3_ms, "df_u2_u3_ms.csv", na = "")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
