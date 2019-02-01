@@ -238,13 +238,12 @@ df_ms_cln <- df_ms %>%
 ```{r}
 names_u2 <- names(df_u2_cln_rn)
 names_u3 <- names(df_u3_cln_clps)
-length(unique(c(names_u2, names_u3)))
+# length(unique(c(names_u2, names_u3)))
 df_u2_u3 <- bind_rows(df_u2_cln_rn, df_u3_cln_clps)
-ncol(df_u2_u3)
+# ncol(df_u2_u3)
 ```
 
 ### UDS 2/3 + MiNDSet Registry
-
 ```{r}
 df_u2_u3_ms <-
   FuzzyDateJoin::outer_left(
@@ -256,40 +255,29 @@ df_u2_u3_ms <-
   )
 ```
 
+## Desparse values
 
-### Fill missing DOB values
+### Propogate demographic values for each pt.
 ```{r}
-df_u2_u3_ms <- df_u2_u3_ms %>% 
-  arrange(ptid, desc(form_date))
+# dob
+df_u2_u3_ms <- propagate_value(df_u2_u3_ms, ptid, form_date, dob)
+# sex
+df_u2_u3_ms <- propagate_value(df_u2_u3_ms, ptid, form_date, sex)
+# race
+df_u2_u3_ms <- propagate_value(df_u2_u3_ms, ptid, form_date, race)
+# educ
+df_u2_u3_ms <- propagate_value(df_u2_u3_ms, ptid, form_date, educ)
+# maristat
+df_u2_u3_ms <- propagate_value(df_u2_u3_ms, ptid, form_date, maristat)
+# handed
+df_u2_u3_ms <- propagate_value(df_u2_u3_ms, ptid, form_date, handed)
+```
 
-for (i in 2:nrow(df_u2_u3_ms)) {
-  # cat(paste(i, "\n"))
-  
-  prev_id <- df_u2_u3_ms[[i-1, "ptid"]]
-  curr_id <- df_u2_u3_ms[[i, "ptid"]]
-  prev_dob <- df_u2_u3_ms[[i-1, "dob"]]
-  curr_dob <- df_u2_u3_ms[[i, "dob"]]
-  
-  if (prev_id == curr_id && !is.na(prev_dob) && is.na(curr_dob)) {
-    df_u2_u3_ms[[i, "dob"]] <- prev_dob
-  }
-}
+## Derive fields
 
-df_u2_u3_ms <- df_u2_u3_ms %>% 
-  arrange(ptid, form_date)
-
-for (i in 2:nrow(df_u2_u3_ms)) {
-  # cat(paste(i, "\n"))
-  
-  prev_id <- df_u2_u3_ms[[i-1, "ptid"]]
-  curr_id <- df_u2_u3_ms[[i, "ptid"]]
-  prev_dob <- df_u2_u3_ms[[i-1, "dob"]]
-  curr_dob <- df_u2_u3_ms[[i, "dob"]]
-  
-  if (prev_id == curr_id && !is.na(prev_dob) && is.na(curr_dob)) {
-    df_u2_u3_ms[[i, "dob"]] <- prev_dob
-  }
-}
+### Add visit number field
+```{r}
+df_u2_u3_ms <- calculate_visit_num(df_u2_u3_ms, ptid, form_date)
 ```
 
 ### Calculate age
@@ -301,7 +289,12 @@ df_u2_u3_ms <- calculate_age(df_u2_u3_ms, dob, form_date)
 ```{r}
 df_u2_u3_ms <- df_u2_u3_ms %>% 
   select(-redcap_event_name, -dob) %>% 
-  select(ptid, form_date, uds_dx, age, age_exact, everything())
+  select(-ends_with("_examiner")) %>% 
+  select(-ends_with("_formver")) %>% 
+  select(-ends_with("pkt_type")) %>% 
+  select(ptid, form_date, visit_num, uds_dx, dx_date = exam_date, 
+         age_years, age_exact, age_units,
+         everything())
 ```
 
 

@@ -371,10 +371,11 @@ get_api_data &lt;-<span class="st"> </span><span class="ot">TRUE</span></code></
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">file_id &lt;-<span class="st"> </span><span class="dv">320718450581</span>
 
 boxr<span class="op">::</span><span class="kw">box_auth</span>(<span class="dt">client_id =</span> BOX_CLIENT_ID, <span class="dt">client_secret =</span> BOX_CLIENT_SECRET)</code></pre></div>
+<pre><code>## Auto-refreshing stale OAuth token.</code></pre>
 <pre><code>## boxr: Authenticated at box.com as L D Nicolas May (ldmay@umich.edu)</code></pre>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="co"># boxr::box_dl(file_id = 320718450581, overwrite = TRUE)</span>
 df_mri &lt;-<span class="st"> </span>boxr<span class="op">::</span><span class="kw">box_read_excel</span>(<span class="dt">file_id =</span> file_id)</code></pre></div>
-<pre><code>## Remote file '/var/folders/k5/vt573fcd2zqd94rsb065h1cw0000gn/T//RtmpGm8wzh/UMMAP_MRI_Tracker_MostRecent.xlsx' read into memory as an object of class data.frame</code></pre>
+<pre><code>## Remote file '/var/folders/k5/vt573fcd2zqd94rsb065h1cw0000gn/T//RtmpWn7riE/UMMAP_MRI_Tracker_MostRecent.xlsx' read into memory as an object of class data.frame</code></pre>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="kw">names</span>(df_mri)</code></pre></div>
 <pre><code>## [1] &quot;No&quot;              &quot;fMRI_ID&quot;         &quot;UDS_ID&quot;          &quot;Scan_Date&quot;      
 ## [5] &quot;Handler&quot;         &quot;fMRI_Exam_No&quot;    &quot;Server_Status&quot;   &quot;Notes&quot;          
@@ -561,11 +562,9 @@ df_ms_cln &lt;-<span class="st"> </span>df_ms <span class="op">%&gt;%</span><spa
 <h3>UDS 2 + UDS 3</h3>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">names_u2 &lt;-<span class="st"> </span><span class="kw">names</span>(df_u2_cln_rn)
 names_u3 &lt;-<span class="st"> </span><span class="kw">names</span>(df_u3_cln_clps)
-<span class="kw">length</span>(<span class="kw">unique</span>(<span class="kw">c</span>(names_u2, names_u3)))</code></pre></div>
-<pre><code>## [1] 411</code></pre>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">df_u2_u3 &lt;-<span class="st"> </span><span class="kw">bind_rows</span>(df_u2_cln_rn, df_u3_cln_clps)
-<span class="kw">ncol</span>(df_u2_u3)</code></pre></div>
-<pre><code>## [1] 411</code></pre>
+<span class="co"># length(unique(c(names_u2, names_u3)))</span>
+df_u2_u3 &lt;-<span class="st"> </span><span class="kw">bind_rows</span>(df_u2_cln_rn, df_u3_cln_clps)
+<span class="co"># ncol(df_u2_u3)</span></code></pre></div>
 </div>
 <div id="uds-23-mindset-registry" class="section level3">
 <h3>UDS 2/3 + MiNDSet Registry</h3>
@@ -578,39 +577,30 @@ names_u3 &lt;-<span class="st"> </span><span class="kw">names</span>(df_u3_cln_c
     <span class="dt">keep_y_id =</span> <span class="ot">FALSE</span>
   )</code></pre></div>
 </div>
-<div id="fill-missing-dob-values" class="section level3">
-<h3>Fill missing DOB values</h3>
-<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">df_u2_u3_ms &lt;-<span class="st"> </span>df_u2_u3_ms <span class="op">%&gt;%</span><span class="st"> </span>
-<span class="st">  </span><span class="kw">arrange</span>(ptid, <span class="kw">desc</span>(form_date))
-
-<span class="cf">for</span> (i <span class="cf">in</span> <span class="dv">2</span><span class="op">:</span><span class="kw">nrow</span>(df_u2_u3_ms)) {
-  <span class="co"># cat(paste(i, &quot;\n&quot;))</span>
-  
-  prev_id &lt;-<span class="st"> </span>df_u2_u3_ms[[i<span class="op">-</span><span class="dv">1</span>, <span class="st">&quot;ptid&quot;</span>]]
-  curr_id &lt;-<span class="st"> </span>df_u2_u3_ms[[i, <span class="st">&quot;ptid&quot;</span>]]
-  prev_dob &lt;-<span class="st"> </span>df_u2_u3_ms[[i<span class="op">-</span><span class="dv">1</span>, <span class="st">&quot;dob&quot;</span>]]
-  curr_dob &lt;-<span class="st"> </span>df_u2_u3_ms[[i, <span class="st">&quot;dob&quot;</span>]]
-  
-  <span class="cf">if</span> (prev_id <span class="op">==</span><span class="st"> </span>curr_id <span class="op">&amp;&amp;</span><span class="st"> </span><span class="op">!</span><span class="kw">is.na</span>(prev_dob) <span class="op">&amp;&amp;</span><span class="st"> </span><span class="kw">is.na</span>(curr_dob)) {
-    df_u2_u3_ms[[i, <span class="st">&quot;dob&quot;</span>]] &lt;-<span class="st"> </span>prev_dob
-  }
-}
-
-df_u2_u3_ms &lt;-<span class="st"> </span>df_u2_u3_ms <span class="op">%&gt;%</span><span class="st"> </span>
-<span class="st">  </span><span class="kw">arrange</span>(ptid, form_date)
-
-<span class="cf">for</span> (i <span class="cf">in</span> <span class="dv">2</span><span class="op">:</span><span class="kw">nrow</span>(df_u2_u3_ms)) {
-  <span class="co"># cat(paste(i, &quot;\n&quot;))</span>
-  
-  prev_id &lt;-<span class="st"> </span>df_u2_u3_ms[[i<span class="op">-</span><span class="dv">1</span>, <span class="st">&quot;ptid&quot;</span>]]
-  curr_id &lt;-<span class="st"> </span>df_u2_u3_ms[[i, <span class="st">&quot;ptid&quot;</span>]]
-  prev_dob &lt;-<span class="st"> </span>df_u2_u3_ms[[i<span class="op">-</span><span class="dv">1</span>, <span class="st">&quot;dob&quot;</span>]]
-  curr_dob &lt;-<span class="st"> </span>df_u2_u3_ms[[i, <span class="st">&quot;dob&quot;</span>]]
-  
-  <span class="cf">if</span> (prev_id <span class="op">==</span><span class="st"> </span>curr_id <span class="op">&amp;&amp;</span><span class="st"> </span><span class="op">!</span><span class="kw">is.na</span>(prev_dob) <span class="op">&amp;&amp;</span><span class="st"> </span><span class="kw">is.na</span>(curr_dob)) {
-    df_u2_u3_ms[[i, <span class="st">&quot;dob&quot;</span>]] &lt;-<span class="st"> </span>prev_dob
-  }
-}</code></pre></div>
+</div>
+<div id="desparse-values" class="section level2">
+<h2>Desparse values</h2>
+<div id="propogate-demographic-values-for-each-pt." class="section level3">
+<h3>Propogate demographic values for each pt.</h3>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r"><span class="co"># dob</span>
+df_u2_u3_ms &lt;-<span class="st"> </span><span class="kw">propagate_value</span>(df_u2_u3_ms, ptid, form_date, dob)
+<span class="co"># sex</span>
+df_u2_u3_ms &lt;-<span class="st"> </span><span class="kw">propagate_value</span>(df_u2_u3_ms, ptid, form_date, sex)
+<span class="co"># race</span>
+df_u2_u3_ms &lt;-<span class="st"> </span><span class="kw">propagate_value</span>(df_u2_u3_ms, ptid, form_date, race)
+<span class="co"># educ</span>
+df_u2_u3_ms &lt;-<span class="st"> </span><span class="kw">propagate_value</span>(df_u2_u3_ms, ptid, form_date, educ)
+<span class="co"># maristat</span>
+df_u2_u3_ms &lt;-<span class="st"> </span><span class="kw">propagate_value</span>(df_u2_u3_ms, ptid, form_date, maristat)
+<span class="co"># handed</span>
+df_u2_u3_ms &lt;-<span class="st"> </span><span class="kw">propagate_value</span>(df_u2_u3_ms, ptid, form_date, handed)</code></pre></div>
+</div>
+</div>
+<div id="derive-fields" class="section level2">
+<h2>Derive fields</h2>
+<div id="add-visit-number-field" class="section level3">
+<h3>Add visit number field</h3>
+<div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">df_u2_u3_ms &lt;-<span class="st"> </span><span class="kw">calculate_visit_num</span>(df_u2_u3_ms, ptid, form_date)</code></pre></div>
 </div>
 <div id="calculate-age" class="section level3">
 <h3>Calculate age</h3>
@@ -620,7 +610,12 @@ df_u2_u3_ms &lt;-<span class="st"> </span>df_u2_u3_ms <span class="op">%&gt;%</s
 <h3>Reorder columns</h3>
 <div class="sourceCode"><pre class="sourceCode r"><code class="sourceCode r">df_u2_u3_ms &lt;-<span class="st"> </span>df_u2_u3_ms <span class="op">%&gt;%</span><span class="st"> </span>
 <span class="st">  </span><span class="kw">select</span>(<span class="op">-</span>redcap_event_name, <span class="op">-</span>dob) <span class="op">%&gt;%</span><span class="st"> </span>
-<span class="st">  </span><span class="kw">select</span>(ptid, form_date, uds_dx, age, age_exact, <span class="kw">everything</span>())</code></pre></div>
+<span class="st">  </span><span class="kw">select</span>(<span class="op">-</span><span class="kw">ends_with</span>(<span class="st">&quot;_examiner&quot;</span>)) <span class="op">%&gt;%</span><span class="st"> </span>
+<span class="st">  </span><span class="kw">select</span>(<span class="op">-</span><span class="kw">ends_with</span>(<span class="st">&quot;_formver&quot;</span>)) <span class="op">%&gt;%</span><span class="st"> </span>
+<span class="st">  </span><span class="kw">select</span>(<span class="op">-</span><span class="kw">ends_with</span>(<span class="st">&quot;pkt_type&quot;</span>)) <span class="op">%&gt;%</span><span class="st"> </span>
+<span class="st">  </span><span class="kw">select</span>(ptid, form_date, visit_num, uds_dx, <span class="dt">dx_date =</span> exam_date, 
+         age_years, age_exact, age_units,
+         <span class="kw">everything</span>())</code></pre></div>
 </div>
 </div>
 </div>
